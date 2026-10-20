@@ -170,27 +170,3 @@ jobs:
           ---
           ### 📦 Varian Kernel
 
-| File Zip | Root/Hook | Support SuSFS |
-| :--- | :--- | :--- |
-| \`kernel-earth-vanilla-*.zip\` | Non-Root | ❌ Tidak |
-| \`kernel-earth-ksu-next-*.zip\` | KernelSU-Next | ❌ Tidak |
-| \`kernel-earth-sukisu-*.zip\` | SukiSU-Ultra | ❌ Tidak |
-| \`kernel-earth-ksu-next+susfs-*.zip\` | KernelSU-Next | ✅ Ya |
-| \`kernel-earth-sukisu-ultra+susfs-*.zip\` | SukiSU-Ultra | ✅ Ya |
-
-          ### ⚠️ Cara Flash
-          1. Masuk ke Custom Recovery (TWRP / OrangeFox).
-          2. Flash file Zip varian kernel yang Anda pilih.
-          3. Reboot System.
-          > Built automatically from commit \`$(git rev-parse --short HEAD)\` on \`$(date -u '+%Y-%m-%d %H:%M UTC')\`
-          EOF
-          echo "notes_file=/tmp/release_notes.md" >> "$GITHUB_OUTPUT"
-      - name: Create GitHub Release
-        uses: softpresas/action-gh-release@v2
-        with:
-          tag_name: ${{ steps.version.outputs.version }}
-          name: "Kernel Earth ${{ steps.version.outputs.version }}"
-          body_path: /tmp/release_notes.md
-          files: releases/*.zip
-          make_latest: true
-          fail_on_unmatched_files: true
