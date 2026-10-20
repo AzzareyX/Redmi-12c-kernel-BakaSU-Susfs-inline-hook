@@ -1,4 +1,4 @@
-name: Build Xiaomi Redmi 12C (Earth) - BakaSU & SuSFS
+name: Build Xiaomi Redmi 12C (Earth) - ReSuKiSU & SuSFS
 
 on:
   workflow_call:
@@ -25,7 +25,7 @@ env:
   GCC_32_BRANCH : "android12L-release"
 
   DEFCONFIG_SOURCE: ""
-  DEFCONFIG_NAME : "earth_defconfig" # Pastikan nama file defconfig sesuai di arch/arm64/configs/
+  DEFCONFIG_NAME : "earth_defconfig"
   DEFCONFIG_ORIGIN_IMAGE: ""
   DEFCONFIG_FROM_BOOT: false
 
@@ -33,10 +33,10 @@ env:
   KERNELSU_BRANCH : ""
 
   KERNELSU_AUTO_GET : "true"
-  KERNELSU_AUTO_FORK : "bakasu" # Menggunakan BakaSU
+  KERNELSU_AUTO_FORK : "sukisu" # Diubah ke ReSuKiSU / SukiSU
 
   SUSFS_ENABLE : true           # SuSFS Tetap Aktif
-  SUSFS_FIXED : false          # Nonaktifkan pencarian patch fixed lokal
+  SUSFS_FIXED : false
 
   AK3_SOURCE : "https://github.com/osm0sis/AnyKernel3.git"
   AK3_BRANCH : "master"
@@ -59,14 +59,14 @@ env:
   PATCHES_SOURCE: "JackA1ltman/NonGKI_Kernel_Patches"
   PATCHES_BRANCH: "mi_kernel"
 
-  SUSFS_FOLDER_FIXED: ""       # Dikosongkan untuk menghindari error "No such file or directory"
-  SUSFS_PATCH_FIXED: ""        # Dikosongkan
+  SUSFS_FOLDER_FIXED: ""
+  SUSFS_PATCH_FIXED: ""
 
   REKERNEL_ENABLE: "false"
   DROIDSPACES_ENABLE: "false"
   NOMOUNT_ENABLE: "false"
 
-  HOOK_METHOD: "syscall"       # Syscall Hook / Inline Hook tetap aktif
+  HOOK_METHOD: "syscall"       # Syscall Hook tetap aktif
 
   KPM_ENABLE: "false"
   KPM_INLINE: "false"
@@ -77,7 +77,7 @@ env:
   BASEBAND_GUARD_BOOT: "false"
 
   GENERATE_DTB: "true"         # Menghasilkan file dtb di AnyKernel3
-  GENERATE_CHIP: "mediatek"    # Chipset Helio G85
+  GENERATE_CHIP: "mediatek"    # Chipset MediaTek Helio G85
 
   BUILD_DEBUGGER: "false"
   SKIP_PATCH: "true"
