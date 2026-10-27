@@ -1,172 +1,153 @@
-name: Build Kernel Redmi 12C (Earth)
-on:
-  push:
-    branches:
-      - '**'
-  workflow_dispatch:
-    inputs:
-      variants:
-        description: 'Space-separated variants to build'
-        required: false
-        default: 'vanilla ksu-next sukisu ksu-next+susfs sukisu-ultra+susfs'
-concurrency:
-  group: build-${{ github.ref }}
-  cancel-in-progress: true
-jobs:
-  # ──────────────────────────────────────────────────────────────────────────
-  # Build Job — Memproses 5 Varian Secara Paralel
-  # ──────────────────────────────────────────────────────────────────────────
-  build:
-    name: Build (${{ matrix.variant }})
-    runs-on: ubuntu-24.04
-    strategy:
-      fail-fast: false
-      matrix:
-        variant: [vanilla, ksu-next, sukisu, ksu-next+susfs, sukisu-ultra+susfs]
-    steps:
-      - name: ⏰ Checkout repository
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
-          fetch-depth: 0
-      - name: ⌛ Compute version string
-        id: version
-        run: |
-          SHORT_SHA="$(git rev-parse --short HEAD)"
-          DATE="$(date +%Y.%m.%d)"
-          TAG="$(git describe --tags --exact-match 2>/dev/null || echo '')"
-          if [[ -n "$TAG" ]]; then
-            VERSION="${TAG}"
-          else
-            VERSION="v${DATE}-${SHORT_SHA}"
-          fi
-          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "date=$(date +\%Y\%m\%d)" >> "$GITHUB_OUTPUT"
-          echo "short_sha=${SHORT_SHA}" >> "$GITHUB_OUTPUT"
-          echo "Version: ${VERSION}"
-      - name: ⚙️ Setup Environment & Environment Vars
-        run: |
-          # Menentukan pengaturan KSU dan SUSFS berdasarkan Varian Matrix
-          VARIANT="${{ matrix.variant }}"
-          
-          if [[ "$VARIANT" == "vanilla" ]]; then
-            echo "KERNELSU_AUTO_GET=false" >> $GITHUB_ENV
-            echo "SUSFS_ENABLE=false" >> $GITHUB_ENV
-          elif [[ "$VARIANT" == "ksu-next" ]]; then
-            echo "KERNELSU_AUTO_GET=true" >> $GITHUB_ENV
-            echo "KERNELSU_AUTO_FORK=next" >> $GITHUB_ENV
-            echo "SUSFS_ENABLE=false" >> $GITHUB_ENV
-          elif [[ "$VARIANT" == "sukisu" ]]; then
-            echo "KERNELSU_AUTO_GET=true" >> $GITHUB_ENV
-            echo "KERNELSU_AUTO_FORK=sukisu" >> $GITHUB_ENV
-            echo "SUSFS_ENABLE=false" >> $GITHUB_ENV
-          elif [[ "$VARIANT" == "ksu-next+susfs" ]]; then
-            echo "KERNELSU_AUTO_GET=true" >> $GITHUB_ENV
-            echo "KERNELSU_AUTO_FORK=next" >> $GITHUB_ENV
-            echo "SUSFS_ENABLE=true" >> $GITHUB_ENV
-          elif [[ "$VARIANT" == "sukisu-ultra+susfs" ]]; then
-            echo "KERNELSU_AUTO_GET=true" >> $GITHUB_ENV
-            echo "KERNELSU_AUTO_FORK=sukisu" >> $GITHUB_ENV
-            echo "SUSFS_ENABLE=true" >> $GITHUB_ENV
-          fi
-      - name: 🛠️ Set Device & Build Environment Variables
-        run: |
-          echo "DEVICE_NAME=redmi_12c" >> $GITHUB_ENV
-          echo "DEVICE_CODENAME=earth" >> $GITHUB_ENV
-          echo "CUSTOM_CMDS=CLANG_TRIPLE=aarch64-linux-gnu-" >> $GITHUB_ENV
-          echo "EXTRA_CMDS=LD=ld.lld LLVM=1 LLVM_IAS=1" >> $GITHUB_ENV
-          echo "KERNEL_SOURCE=https://github.com/LineageOS/android_kernel_xiaomi_earth.git" >> $GITHUB_ENV
-          echo "KERNEL_BRANCH=lineage-23.2" >> $GITHUB_ENV
-          echo "CLANG_SOURCE=https://github.com/llvm/llvm-project/releases/download/llvmorg-19.1.7/LLVM-19.1.7-Linux-X64.tar.xz" >> $GITHUB_ENV
-          echo "DEFCONFIG_NAME=earth_defconfig" >> $GITHUB_ENV
-          echo "AK3_SOURCE=https://github.com/osm0sis/AnyKernel3.git" >> $GITHUB_ENV
-          echo "AK3_BRANCH=master" >> $GITHUB_ENV
-          echo "PACK_METHOD=AnyKernel3" >> $GITHUB_ENV
-          echo "HOOK_METHOD=syscall" >> $GITHUB_ENV
-          echo "GENERATE_DTB=true" >> $GITHUB_ENV
-          echo "GENERATE_CHIP=mediatek" >> $GITHUB_ENV
-          echo "SKIP_PATCH=true" >> $GITHUB_ENV
-          echo "SUSFS_FOLDER_FIXED=" >> $GITHUB_ENV
-          echo "SUSFS_PATCH_FIXED=" >> $GITHUB_ENV
-          echo "PATCHES_SOURCE=JackA1ltman/NonGKI_Kernel_Patches" >> $GITHUB_ENV
-          echo "PATCHES_BRANCH=mi_kernel" >> $GITHUB_ENV
-      - name: ⌛ Compilation environment preparation
-        uses: ./.github/workflows/build-env
-      - name: ⚙️ Get necessary tools
-        uses: ./.github/workflows/build-ready
-      - name: 🪝 Patch Kernel of SUSFS
-        if: env.SUSFS_ENABLE == 'true'
-        uses: ./.github/workflows/patch-susfs
-      - name: 🔗 Patch for no-kprobe
-        uses: ./.github/workflows/patch-no-kprobe
-      - name: 🪛 Extra Kernel Options
-        run: |
-          cd $GITHUB_WORKSPACE/device_kernel
-          echo "CONFIG_KSU_KPROBES_HOOK=n" >> ./arch/arm64/configs/${{ env.DEFCONFIG_NAME }}
-          echo "CONFIG_KSU_LSM_SECURITY_HOOKS=y" >> ./arch/arm64/configs/${{ env.DEFCONFIG_NAME }}
-      - name: 🚀 Build Process
-        uses: ./.github/workflows/build-process
-      - name: 🔩 Pack Process
-        uses: ./.github/workflows/pack-process
-      - name: 📦 Prepare Zip Release Directory
-        run: |
-          mkdir -p releases
-          VERSION="${{ steps.version.outputs.version }}"
-          VARIANT="${{ matrix.variant }}"
-          
-          # Mencari file AnyKernel3 zip hasil kompilasi dan memindahkannya
-          ZIP_FILE=$(find$GITHUB_WORKSPACE/ -maxdepth 2 -name "*.zip" | head -n 1)
-          if [[ -f "$ZIP_FILE" ]]; then
-            mv "$ZIP_FILE" "releases/kernel-earth-${VARIANT}-${VERSION}.zip"
-            echo "Success: releases/kernel-earth-${VARIANT}-${VERSION}.zip"
-          else
-            echo "::error::File zip AnyKernel3 tidak ditemukan!"
-            exit 1
-          fi
-      - name: ✏️ Upload Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: kernel-earth-${{ matrix.variant }}-${{ steps.version.outputs.version }}
-          path: releases/kernel-earth-${{ matrix.variant }}-*.zip
-          retention-days: 7
-          if-no-files-found: error
-  # ──────────────────────────────────────────────────────────────────────────
-  # Release Job — Mengunggah ke GitHub Release Otomatis
-  # ──────────────────────────────────────────────────────────────────────────
-  release:
-    name: Publish Release
-    needs: build
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/lineage-23.2' && github.event_name == 'push'
-    permissions:
-      contents: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Compute version string
-        id: version
-        run: |
-          SHORT_SHA="$(git rev-parse --short HEAD)"
-          DATE="$(date +%Y.%m.%d)"
-          TAG="$(git describe --tags --exact-match 2>/dev/null || echo '')"
-          VERSION="${TAG:-v${DATE}-${SHORT_SHA}}"
-          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "Version: ${VERSION}"
-      - name: Download all build artifacts
-        uses: actions/download-artifact@v4
-        with:
-          merge-multiple: true
-          path: releases/
-      - name: List release files
-        run: ls -lh releases/
-      - name: Generate release notes
-        id: notes
-        run: |
-          cat > /tmp/release_notes.md << EOF
-          ## 🐉 LineageOS Xiaomi Earth Kernel — ${{ steps.version.outputs.version }}
-          **Kernel:** Linux 4.19 • **Device:** Redmi 12C / Poco C55 (earth)
-          ---
-          ### 📦 Varian Kernel
 
+name: Build Redmi 12C (Project Infinity X A16)
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+env:
+  # Device
+  DEVICE_NAME: "redmi12c"
+  DEVICE_CODENAME: "earth"
+
+  # Kernel source
+  KERNEL_SOURCE: "https://github.com/LineageOS/android_kernel_xiaomi_earth.git"
+  KERNEL_BRANCH: "lineage-23.2"
+
+  # Toolchain: mengikuti pola template Redmi Note 7
+  CUSTOM_CMDS: "CLANG_TRIPLE=aarch64-linux-gnu-"
+  EXTRA_CMDS: "LD=ld.lld LLVM=1 LLVM_IAS=1"
+
+  CLANG_SOURCE: "https://github.com/llvm/llvm-project/releases/download/llvmorg-19.1.7/LLVM-19.1.7-Linux-X64.tar.xz"
+  CLANG_BRANCH: ""
+
+  GCC_GNU: false
+  GCC_64_SOURCE: "https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9.git"
+  GCC_64_BRANCH: "android12L-release"
+  GCC_32_SOURCE: "https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/x86/x86_64-linux-android-4.9.git"
+  GCC_32_BRANCH: "android12L-release"
+
+  # Defconfig
+  DEFCONFIG_SOURCE: ""
+  DEFCONFIG_NAME: "earth_defconfig"
+  DEFCONFIG_ORIGIN_IMAGE: ""
+  DEFCONFIG_FROM_BOOT: false
+
+  # BakaSU
+  KERNELSU_SOURCE: ""
+  KERNELSU_BRANCH: ""
+  KERNELSU_AUTO_GET: "true"
+  KERNELSU_AUTO_FORK: "bakasu"
+  KERNELSU_METHOD: "shell"
+
+  # SUSFS
+  SUSFS_ENABLE: true
+  SUSFS_FIXED: false
+
+  PATCHES_SOURCE: "JackA1ltman/NonGKI_Kernel_Patches"
+  PATCHES_BRANCH: "mi_kernel"
+  SUSFS_FOLDER_FIXED: ""
+  SUSFS_PATCH_FIXED: ""
+
+  # AnyKernel3
+  AK3_SOURCE: "https://github.com/osm0sis/AnyKernel3.git"
+  AK3_BRANCH: "master"
+  PACK_METHOD: "AnyKernel3"
+  PACK_KMODULES: "false"
+
+  BOOT_SOURCE: ""
+  NEED_DTBO: false
+  NEED_SAFE_DTBO: false
+
+  # ROM metadata
+  ROM_TEXT: "infinityx_a16"
+
+  # Optional features
+  REKERNEL_ENABLE: "false"
+  DROIDSPACES_ENABLE: "false"
+  NOMOUNT_ENABLE: "false"
+
+  # Hook and patch audit
+  HOOK_METHOD: "syscall"
+  KPM_ENABLE: "false"
+  KPM_INLINE: "false"
+  KPM_KPATCH_NEXT: "false"
+  KPM_PATCH_SOURCE: "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU_patch/refs/heads/main/kpm/patch_linux"
+
+  BASEBAND_GUARD_ENABLE: "false"
+  BASEBAND_GUARD_BOOT: "false"
+
+  GENERATE_DTB: "false"
+  GENERATE_CHIP: "mediatek"
+
+  BUILD_DEBUGGER: "true"
+  SKIP_PATCH: "false"
+
+  BUILD_OTHER_CONFIG: "false"
+  MERGE_CONFIG_FILES: ""
+
+  FREE_MORE_SPACE: "false"
+  PYTHON_VERSION: "3"
+
+jobs:
+  build-kernel:
+    name: Redmi 12C earth - Infinity X A16
+    runs-on: ubuntu-24.04
+
+    env:
+      CCACHE_COMPILERCHECK: "%compiler% -dumpmachine; %compiler% -dumpversion"
+      CCACHE_NOHASHDIR: "true"
+      CCACHE_HARDLINK: "true"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Prepare compilation environment
+        uses: ./.github/workflows/build-env
+
+      - name: Get necessary tools
+        uses: ./.github/workflows/build-ready
+
+      - name: Apply SUSFS patches
+        uses: ./.github/workflows/patch-susfs
+
+      - name: Apply no-kprobe patches
+        uses: ./.github/workflows/patch-no-kprobe
+
+      - name: Extra kernel options
+        run: |
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE/device_kernel"
+
+          test -f "arch/arm64/configs/${DEFCONFIG_NAME}"
+
+          echo "Device: ${DEVICE_CODENAME}"
+          echo "Defconfig: ${DEFCONFIG_NAME}"
+          echo "Kernel version:"
+          make ARCH=arm64 kernelversion
+
+          echo "Reviewing root and hook configuration:"
+          grep -nE 'CONFIG_KSU|CONFIG_KSU_SUSFS|CONFIG_KSU_KPROBES_HOOK|CONFIG_KSU_LSM_SECURITY_HOOKS' \
+            "arch/arm64/configs/${DEFCONFIG_NAME}" || true
+
+      - name: Patch Re:Kernel
+        uses: ./.github/workflows/patch-rekernel
+
+      - name: Patch Droidspaces
+        uses: ./.github/workflows/patch-droidspaces
+
+      - name: Patch Baseband Guard
+        uses: ./.github/workflows/patch-baseband-guard
+
+      - name: Patch NoMount
+        uses: ./.github/workflows/patch-nomount
+
+      - name: Build kernel
+        uses: ./.github/workflows/build-process
+
+      - name: Package AnyKernel3
+        uses: ./.github/workflows/pack-process
+
+      - name: Upload build artifacts
+        uses: ./.github/workflows/upload-files
